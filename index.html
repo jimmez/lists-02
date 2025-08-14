@@ -2,13 +2,12 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <title>Prompt Generator (Multi List Pages + Prompt-only Subpages)</title>
+  <title>Prompt Generator (Multi List Pages + Prompt under Mode Buttons)</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0" />
   <style>
     :root {
       --maxw: 560px;
       --pad: 10px;
-      --rightPromptH: 120px;
       --topPad: 56px;            /* space for stamp/topbar */
       --paneMinH: calc(100vh - var(--topPad) - 16px);
     }
@@ -125,6 +124,19 @@
     .mode-row { display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin-top:10px; }
     .rowFooter { display:flex; gap:8px; margin-top:8px; align-items:center; flex-wrap:wrap; }
 
+    /* Mid-page Prompt (right under mode buttons) */
+    .midPrompt {
+      width:100%; max-width: var(--maxw);
+      margin-top:8px; padding:8px;
+      background:#000; border-top:1px solid #222; border-bottom:1px solid #222;
+    }
+    .midOut {
+      text-align:center; font-weight:700; line-height:1.18;
+      font-size: clamp(18px, 5.2vw, 28px);
+      word-break: break-word;
+      user-select:none;
+    }
+
     /* Tag beside words — small blue, not bold */
     .tag {
       display:inline-block;
@@ -138,24 +150,6 @@
       vertical-align:middle;
       letter-spacing:.02em;
       font-weight:400;
-    }
-
-    /* Bottom prompt dock on list panes */
-    .bottomPrompt {
-      position: sticky; bottom: 0; width: 100%;
-      background:#000; border-top: 1px solid #222; height: var(--rightPromptH);
-      padding: 6px; display:flex; align-items:stretch; justify-content:center; margin-top:auto;
-    }
-    .outBox {
-      width:100%; max-width: var(--maxw);
-      height: 100%; overflow: auto; display:block; padding: 2px 4px;
-    }
-    .outText {
-      text-align:center; font-weight:700; line-height:1.18;
-      font-size: clamp(16px, 4.5vw, 24px);
-      word-break: break-word;
-      max-width: var(--maxw);
-      user-select:none;
     }
 
     /* Prompt-only pane (full-screen-ish) */
@@ -186,7 +180,7 @@
 </head>
 <body class="page-1">
   <!-- Stamp -->
-  <div id="stamp">Jimmy James - 13.08.2025 - 22:58</div>
+  <div id="stamp">Jimmy James - 14.08.2025 - 10:22</div>
 
   <!-- Global topbar -->
   <div id="topbar">
@@ -283,9 +277,10 @@
               <button data-mode="combine">Combine</button>
               <button data-mode="single">Single</button>
             </div>
-          </div>
-          <div class="bottomPrompt" title="Tap to advance">
-            <div class="outBox" id="outBox1"><div class="outText" id="outText1">Prompt appears here.</div></div>
+            <!-- Mid-page prompt directly under mode buttons -->
+            <div class="midPrompt" id="midPrompt1" title="Tap to advance">
+              <div class="midOut" id="midOut1">Prompt appears here.</div>
+            </div>
           </div>
         </div>
 
@@ -324,9 +319,10 @@
               <button data-mode="combine">Combine</button>
               <button data-mode="single">Single</button>
             </div>
-          </div>
-          <div class="bottomPrompt" title="Tap to advance">
-            <div class="outBox" id="outBox2"><div class="outText" id="outText2">Prompt appears here.</div></div>
+            <!-- Mid-page prompt directly under mode buttons -->
+            <div class="midPrompt" id="midPrompt2" title="Tap to advance">
+              <div class="midOut" id="midOut2">Prompt appears here.</div>
+            </div>
           </div>
         </div>
 
@@ -364,9 +360,10 @@
               <button data-mode="combine">Combine</button>
               <button data-mode="single">Single</button>
             </div>
-          </div>
-          <div class="bottomPrompt" title="Tap to advance">
-            <div class="outBox" id="outBox3"><div class="outText" id="outText3">Prompt appears here.</div></div>
+            <!-- Mid-page prompt directly under mode buttons -->
+            <div class="midPrompt" id="midPrompt3" title="Tap to advance">
+              <div class="midOut" id="midOut3">Prompt appears here.</div>
+            </div>
           </div>
         </div>
 
@@ -447,11 +444,11 @@
     // List page grids + outputs
     const grids = {
       listGrid1: { ids: PAGE1, el: document.getElementById('listGrid1'), reset: document.getElementById('resetSeq1'),
-                   outBox: document.getElementById('outBox1'), outText: document.getElementById('outText1'), bigOut: document.getElementById('bigOut1') },
+                   midOut: document.getElementById('midOut1'), bigOut: document.getElementById('bigOut1') },
       listGrid2: { ids: PAGE2, el: document.getElementById('listGrid2'), reset: document.getElementById('resetSeq2'),
-                   outBox: document.getElementById('outBox2'), outText: document.getElementById('outText2'), bigOut: document.getElementById('bigOut2') },
+                   midOut: document.getElementById('midOut2'), bigOut: document.getElementById('bigOut2') },
       listGrid3: { ids: PAGE3, el: document.getElementById('listGrid3'), reset: document.getElementById('resetSeq3'),
-                   outBox: document.getElementById('outBox3'), outText: document.getElementById('outText3'), bigOut: document.getElementById('bigOut3') }
+                   midOut: document.getElementById('midOut3'), bigOut: document.getElementById('bigOut3') }
     };
 
     // Mode rows
@@ -696,9 +693,9 @@
     function setAllOutputs(html){
       // Center prompt
       output.innerHTML = html;
-      // List page docks + prompt-only big outputs
+      // List page mid prompts + prompt-only big outputs
       Object.values(grids).forEach(g=>{
-        g.outText.innerHTML = html;
+        g.midOut.innerHTML = html;
         g.bigOut.innerHTML = html;
       });
     }
@@ -858,11 +855,8 @@
 
     // Tap/Click to advance prompts
     document.getElementById('tapZone').addEventListener('click', (e)=>{ if (!e.target.closest('button,input,textarea,select')) generatePrompt(); });
-    // list page docks & prompt-only panes + empty areas: tap to advance
-    Object.values(grids).forEach(g=>{
-      g.outBox.addEventListener('click', (e)=>{ if (!e.target.closest('button,input,textarea,select')) generatePrompt(); });
-    });
-    ['promptOnly1','promptOnly2','promptOnly3','stack1','listPane1','promptPane1','stack2','listPane2','promptPane2','stack3','listPane3','promptPane3'].forEach(id=>{
+    // list page mid prompts & prompt-only panes + empty areas: tap to advance
+    ['midPrompt1','midPrompt2','midPrompt3','promptOnly1','promptOnly2','promptOnly3','stack1','listPane1','promptPane1','stack2','listPane2','promptPane2','stack3','listPane3','promptPane3'].forEach(id=>{
       const el = document.getElementById(id);
       if (el) el.addEventListener('click', (e)=>{ if (!e.target.closest('button,input,textarea,select')) generatePrompt(); });
     });
@@ -881,7 +875,7 @@
     const exportBtn=document.getElementById('exportBtn'), importBtn=document.getElementById('importBtn'), importFile=document.getElementById('importFile');
     exportBtn.addEventListener('click', ()=>{
       const data = {
-        version: 10,
+        version: 11,
         labels: LABELS, lists, names, meta,
         selectedOrder, mode, showTags,
         settings:{ autoPlay, soundOn, minTime, maxTime, volume, rate, randomVoicePerPrompt }
@@ -906,7 +900,7 @@
             });
           }
           if (data.names){
-            names = {...Object.fromEntries(LABELS.map(l=>[l,'' ])), ...data.names};
+            names = {...Object.fromEntries(LABELS.map(l=>[l,''])), ...data.names};
             localStorage.setItem('promptListNames', JSON.stringify(names));
             refreshAllNames();
           }

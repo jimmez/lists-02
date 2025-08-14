@@ -1,4 +1,1052 @@
-dd
-d
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Prompt Generator (Multi List Pages + Prompt-only Subpages)</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0" />
+  <style>
+    :root {
+      --maxw: 560px;
+      --pad: 10px;
+      --rightPromptH: 120px;
+      --topPad: 56px;            /* space for stamp/topbar */
+      --paneMinH: calc(100vh - var(--topPad) - 16px);
+    }
 
-d
+    * { box-sizing: border-box; }
+    html, body { margin:0; padding:0; background:#000; color:#fff; font-family: Arial, sans-serif; }
+    body { overflow: hidden; }
+
+    /* Stamp (top-right, always visible) */
+    #stamp {
+      position: fixed; top: 6px; right: 8px;
+      font-size: 12px; color:#bbb; opacity:.95; z-index: 1000; white-space: nowrap;
+      pointer-events:none;
+    }
+
+    /* Global topbar (Start/Stop + Sound) — always visible */
+    #topbar {
+      position: fixed; top: 6px; left: 8px; z-index: 1001; display:flex; gap:8px; align-items:center;
+    }
+    #autoBtn, #soundBtn {
+      background:#1a1a1a; border:1px solid #333; color:#fff; border-radius:10px; padding:6px 10px; font-size:13px; cursor:pointer;
+    }
+    /* Larger Start/Stop on center prompt page */
+    body.page-1 #autoBtn { font-size:18px; padding:10px 16px; border-radius:12px; }
+
+    /* Horizontal pages (0..4 => 5 pages) */
+    #pages {
+      position: fixed; inset: 0; display:flex; width: 500vw; height: 100vh; transform: translateX(-100vw);
+      transition: transform .28s ease;
+      touch-action: pan-y;
+    }
+    .page {
+      width:100vw; height:100vh; padding: var(--topPad) 12px 12px;
+      display:flex; flex-direction:column; align-items:center; overflow:hidden; /* inner scrollers handle overflow */
+    }
+
+    /* CENTER (Prompt) */
+    #promptPage main {
+      flex:1; width:100%; max-width: var(--maxw);
+      display:flex; align-items:center; justify-content:center; padding: 8px;
+    }
+    #output {
+      text-align:center; font-weight:800; line-height:1.15;
+      font-size: clamp(24px, 7.5vw, 48px);
+      word-break: break-word;
+      max-width: var(--maxw);
+      user-select:none;
+    }
+    .hint { font-size:12px; color:#aaa; margin-top:8px; opacity:.9; }
+
+    /* LEFT (Controls) */
+    .panel { width:100%; max-width: var(--maxw); display:flex; flex-direction:column; gap:10px; overflow:auto; height:100%; }
+    .card { background:#111; border:1px solid #333; border-radius:12px; padding:10px; }
+    .row { display:flex; flex-wrap:wrap; gap:8px; align-items:center; }
+    button, .btn {
+      background:#333; color:#fff; border: none; border-radius:8px; padding:6px 10px; font-size:13px; cursor:pointer;
+    }
+    .btn-outline { background:#1a1a1a; border:1px solid #444; }
+    input[type="number"], input[type="text"] {
+      background:#0f0f0f; color:#fff; border:1px solid #444; border-radius:6px; padding:6px 8px; font-size:13px;
+    }
+    .timing-row button.active, .mode-row button.active { background:#0a84ff; }
+
+    /* LIST PAGES (3x): each page has an inner vertical scroller with two panes (list + prompt-only) */
+    .stack {
+      position: relative; width:100%; height:100%;
+      overflow:auto; scroll-snap-type: y mandatory;
+    }
+    .pane {
+      scroll-snap-align: start; min-height: var(--paneMinH);
+      display:flex; flex-direction:column; align-items:center;
+    }
+
+    .miniControls { width:100%; max-width: var(--maxw); margin: 4px 0 8px; display:flex; flex-wrap:wrap; gap:8px; align-items:center; }
+    .miniControls .timers { display:flex; gap:6px; flex-wrap:wrap; }
+    .miniControls .timers button { padding:4px 8px; font-size:12px; border-radius:8px; background:#1a1a1a; border:1px solid #333; }
+    .miniControls .timers button.active { background:#0a84ff; }
+
+    .listHelp { font-size:12px; color:#aaa; margin:4px 0 8px; text-align:center; }
+
+    .gridWrap { width:100%; max-width: var(--maxw); }
+    .listGrid {
+      display:grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap:8px; width:100%;
+    }
+    @media (min-width: 640px) { .listGrid { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+
+    .listBtn {
+      position:relative; display:flex; align-items:center; gap:8px;
+      background:#1a1a1a; border:1px solid #333; border-radius:12px; padding:8px 10px; min-height:44px;
+    }
+    .pill {
+      width:22px; height:22px; border-radius:50%; display:flex; align-items:center; justify-content:center;
+      font-size:12px; font-weight:700; color:#000; border:1px solid #444; flex-shrink:0;
+      background:#222;
+    }
+    .lname { font-size:13px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+    .badge {
+      position:absolute; top:-6px; right:-6px; min-width:20px; height:20px; padding:0 5px; border-radius:999px;
+      background:#0a84ff; color:#fff; font-size:12px; display:none; align-items:center; justify-content:center;
+      box-shadow: 0 0 0 1px #0a84ff inset; pointer-events:none;
+    }
+    .listBtn.active .badge { display:flex; }
+
+    .mode-row { display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin-top:10px; }
+    .rowFooter { display:flex; gap:8px; margin-top:8px; align-items:center; flex-wrap:wrap; }
+
+    /* Tag beside words — small blue, not bold */
+    .tag {
+      display:inline-block;
+      font-size:0.55em;
+      margin-left:4px;
+      padding:1px 5px;
+      background: rgba(10,132,255,0.08);
+      border: 1px solid rgba(10,132,255,0.55);
+      border-radius:999px;
+      color:#6eb1ff;
+      vertical-align:middle;
+      letter-spacing:.02em;
+      font-weight:400;
+    }
+
+    /* Bottom prompt dock on list panes */
+    .bottomPrompt {
+      position: sticky; bottom: 0; width: 100%;
+      background:#000; border-top: 1px solid #222; height: var(--rightPromptH);
+      padding: 6px; display:flex; align-items:stretch; justify-content:center; margin-top:auto;
+    }
+    .outBox {
+      width:100%; max-width: var(--maxw);
+      height: 100%; overflow: auto; display:block; padding: 2px 4px;
+    }
+    .outText {
+      text-align:center; font-weight:700; line-height:1.18;
+      font-size: clamp(16px, 4.5vw, 24px);
+      word-break: break-word;
+      max-width: var(--maxw);
+      user-select:none;
+    }
+
+    /* Prompt-only pane (full-screen-ish) */
+    .promptOnly {
+      width:100%; max-width: var(--maxw);
+      flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:12px; padding: 6px;
+    }
+    .promptOnly .bigOut {
+      text-align:center; font-weight:800; line-height:1.15;
+      font-size: clamp(24px, 7.5vw, 48px);
+      word-break: break-word;
+      user-select:none;
+    }
+    .hint.small { font-size:11px; color:#aaa; opacity:.7; }
+
+    /* Editor page */
+    #editorPage { position: fixed; inset:0; background:#000; z-index:1200; display:none; flex-direction:column; padding:56px 10px 10px; }
+    #editorHeader { position: fixed; top: 6px; left: 8px; right: 8px; z-index: 1201; display:flex; gap:8px; align-items:center; }
+    #editorHeader .title { flex:1; display:flex; gap:8px; align-items:center; background:#111; border:1px solid #333; border-radius:10px; padding:6px 8px; }
+    #listName { flex:1; min-width: 100px; }
+    #editorArea { flex:1; margin-top: 8px; display:flex; flex-direction:column; gap:8px; }
+    #listTextarea {
+      width:100%; height: calc(100vh - 140px); background:#0a0a0a; color:#fff; border:1px solid #333; border-radius:10px;
+      padding:10px; font-size:14px; line-height:1.35; white-space:pre; overflow:auto;
+    }
+    .editor-actions { display:flex; gap:8px; flex-wrap:wrap; }
+  </style>
+</head>
+<body class="page-1">
+  <!-- Stamp -->
+  <div id="stamp">Jimmy James - 13.08.2025 - 22:58</div>
+
+  <!-- Global topbar -->
+  <div id="topbar">
+    <button id="autoBtn" title="Start/Stop autoplay">▶️ Start</button>
+    <button id="soundBtn" title="Toggle audio">🔊 Sound: ON</button>
+  </div>
+
+  <!-- Horizontal pages: 0=left, 1=center prompt, 2=list pg1, 3=list pg2, 4=list pg3 -->
+  <div id="pages" aria-live="polite">
+    <!-- PAGE 0: Controls -->
+    <section class="page" id="leftPage">
+      <div class="panel">
+        <div class="card">
+          <div class="row"><strong>Timer presets</strong></div>
+          <div class="row timing-row">
+            <button id="t5">5–10s</button>
+            <button id="t10" class="active">10–20s</button>
+            <button id="t30">30–60s</button>
+            <button id="t90">90–120s</button>
+            <button id="t150">150–300s</button>
+          </div>
+          <div class="row">
+            Custom:
+            <input type="number" id="minCustom" value="10" min="1" style="width:70px">–
+            <input type="number" id="maxCustom" value="20" min="1" style="width:70px">s
+            <button id="applyCustom">Set</button>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="row"><strong>Audio</strong></div>
+          <div class="row">
+            <span id="volReadout" class="btn btn-outline">Volume: 100%</span>
+            <input id="volRange" type="range" min="0" max="100" value="100" />
+          </div>
+          <div class="row">
+            <span id="rateReadout" class="btn btn-outline">Rate: 1.00×</span>
+            <input id="rateRange" type="range" min="60" max="160" value="100" />
+          </div>
+          <div class="row">
+            <button id="voiceRandom" class="btn btn-outline" title="Random voice per prompt">🎲 Voice: OFF</button>
+            <button id="tagsBtn" class="btn btn-outline" title="Show list tag next to words">🏷 Tags: OFF</button>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="row"><strong>Data</strong></div>
+          <div class="row">
+            <button id="exportBtn">⬇️ Export JSON</button>
+            <button id="importBtn">⬆️ Import JSON</button>
+            <input type="file" id="importFile" accept="application/json" hidden>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="row" style="font-size:12px;color:#aaa">
+            Swipe right for Lists • Swipe left to return to Prompt
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- PAGE 1: Big Prompt -->
+    <section class="page" id="promptPage">
+      <main id="tapZone" title="Tap anywhere for next prompt">
+        <div id="output">Your prompt will appear here.</div>
+      </main>
+      <div class="hint">Tap anywhere for next • Swipe left/right for other pages</div>
+    </section>
+
+    <!-- PAGE 2: List Page 1 (A..O) + Prompt-only subpage -->
+    <section class="page" id="listPage1">
+      <div class="stack" id="stack1">
+        <!-- Pane 1: List view -->
+        <div class="pane" id="listPane1">
+          <div class="miniControls">
+            <div class="timers" id="miniTimers1">
+              <button data-preset="5-10">5–10s</button>
+              <button data-preset="10-20" class="active">10–20s</button>
+              <button data-preset="30-60">30–60s</button>
+              <button data-preset="90-120">90–120s</button>
+              <button data-preset="150-300">150–300s</button>
+            </div>
+          </div>
+          <div class="listHelp">Tap to select; <strong>triple-tap</strong> to edit. Badge shows order (Sequential), ✓ (Combine), ● (Single). Scroll down for Prompt-only.</div>
+          <div class="gridWrap">
+            <div class="listGrid" id="listGrid1"></div>
+            <div class="rowFooter">
+              <button id="resetSeq1" class="btn btn-outline">♻️ Clear Selection</button>
+            </div>
+            <div class="mode-row" id="modeRow1">
+              <strong style="margin-right:4px;">Mode:</strong>
+              <button data-mode="sequential" class="active">Sequential</button>
+              <button data-mode="combine">Combine</button>
+              <button data-mode="single">Single</button>
+            </div>
+          </div>
+          <div class="bottomPrompt" title="Tap to advance">
+            <div class="outBox" id="outBox1"><div class="outText" id="outText1">Prompt appears here.</div></div>
+          </div>
+        </div>
+
+        <!-- Pane 2: Prompt-only -->
+        <div class="pane" id="promptPane1">
+          <div class="promptOnly" id="promptOnly1" title="Tap to advance">
+            <div class="miniControls">
+              <div class="timers" id="miniTimers1b">
+                <button data-preset="5-10">5–10s</button>
+                <button data-preset="10-20" class="active">10–20s</button>
+                <button data-preset="30-60">30–60s</button>
+                <button data-preset="90-120">90–120s</button>
+                <button data-preset="150-300">150–300s</button>
+              </div>
+            </div>
+            <div class="bigOut" id="bigOut1">Your prompt will appear here.</div>
+            <div class="hint small">Scroll up for lists • Tap for next</div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- PAGE 3: List Page 2 (P..AD) + Prompt-only subpage -->
+    <section class="page" id="listPage2">
+      <div class="stack" id="stack2">
+        <div class="pane" id="listPane2">
+          <div class="miniControls">
+            <div class="timers" id="miniTimers2">
+              <button data-preset="5-10">5–10s</button>
+              <button data-preset="10-20" class="active">10–20s</button>
+              <button data-preset="30-60">30–60s</button>
+              <button data-preset="90-120">90–120s</button>
+              <button data-preset="150-300">150–300s</button>
+            </div>
+          </div>
+          <div class="listHelp">Tap to select; <strong>triple-tap</strong> to edit. Scroll down for Prompt-only.</div>
+          <div class="gridWrap">
+            <div class="listGrid" id="listGrid2"></div>
+            <div class="rowFooter">
+              <button id="resetSeq2" class="btn btn-outline">♻️ Clear Selection</button>
+            </div>
+            <div class="mode-row" id="modeRow2">
+              <strong style="margin-right:4px;">Mode:</strong>
+              <button data-mode="sequential" class="active">Sequential</button>
+              <button data-mode="combine">Combine</button>
+              <button data-mode="single">Single</button>
+            </div>
+          </div>
+          <div class="bottomPrompt" title="Tap to advance">
+            <div class="outBox" id="outBox2"><div class="outText" id="outText2">Prompt appears here.</div></div>
+          </div>
+        </div>
+
+        <div class="pane" id="promptPane2">
+          <div class="promptOnly" id="promptOnly2" title="Tap to advance">
+            <div class="miniControls">
+              <div class="timers" id="miniTimers2b">
+                <button data-preset="5-10">5–10s</button>
+                <button data-preset="10-20" class="active">10–20s</button>
+                <button data-preset="30-60">30–60s</button>
+                <button data-preset="90-120">90–120s</button>
+                <button data-preset="150-300">150–300s</button>
+              </div>
+            </div>
+            <div class="bigOut" id="bigOut2">Your prompt will appear here.</div>
+            <div class="hint small">Scroll up for lists • Tap for next</div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- PAGE 4: List Page 3 (AE..AS) + Prompt-only subpage -->
+    <section class="page" id="listPage3">
+      <div class="stack" id="stack3">
+        <div class="pane" id="listPane3">
+          <div class="miniControls">
+            <div class="timers" id="miniTimers3">
+              <button data-preset="5-10">5–10s</button>
+              <button data-preset="10-20" class="active">10–20s</button>
+              <button data-preset="30-60">30–60s</button>
+              <button data-preset="90-120">90–120s</button>
+              <button data-preset="150-300">150–300s</button>
+            </div>
+          </div>
+          <div class="listHelp">Tap to select; <strong>triple-tap</strong> to edit. Scroll down for Prompt-only.</div>
+          <div class="gridWrap">
+            <div class="listGrid" id="listGrid3"></div>
+            <div class="rowFooter">
+              <button id="resetSeq3" class="btn btn-outline">♻️ Clear Selection</button>
+            </div>
+            <div class="mode-row" id="modeRow3">
+              <strong style="margin-right:4px;">Mode:</strong>
+              <button data-mode="sequential" class="active">Sequential</button>
+              <button data-mode="combine">Combine</button>
+              <button data-mode="single">Single</button>
+            </div>
+          </div>
+          <div class="bottomPrompt" title="Tap to advance">
+            <div class="outBox" id="outBox3"><div class="outText" id="outText3">Prompt appears here.</div></div>
+          </div>
+        </div>
+
+        <div class="pane" id="promptPane3">
+          <div class="promptOnly" id="promptOnly3" title="Tap to advance">
+            <div class="miniControls">
+              <div class="timers" id="miniTimers3b">
+                <button data-preset="5-10">5–10s</button>
+                <button data-preset="10-20" class="active">10–20s</button>
+                <button data-preset="30-60">30–60s</button>
+                <button data-preset="90-120">90–120s</button>
+                <button data-preset="150-300">150–300s</button>
+              </div>
+            </div>
+            <div class="bigOut" id="bigOut3">Your prompt will appear here.</div>
+            <div class="hint small">Scroll up for lists • Tap for next</div>
+          </div>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <!-- EDITOR -->
+  <div id="editorPage" role="dialog" aria-modal="true" aria-label="Edit list">
+    <div id="editorHeader">
+      <div class="title">
+        <strong id="editorLetter" style="min-width:24px;text-align:center"></strong>
+        <input id="listName" type="text" placeholder="List name…" />
+      </div>
+      <button id="saveList" class="btn">💾 Save</button>
+      <button id="cancelEdit" class="btn btn-outline">✕ Close</button>
+    </div>
+    <div id="editorArea">
+      <textarea id="listTextarea" placeholder="One entry per line. Edit freely, paste, cut, delete."></textarea>
+      <div class="editor-actions">
+        <button id="dedupe" class="btn btn-outline">🧹 Dedupe</button>
+        <button id="sortAZ" class="btn btn-outline">🔤 Sort A–Z</button>
+        <button id="sortByTime" class="btn btn-outline">🕒 Sort by Added</button>
+        <button id="clearList" class="btn btn-outline">🗑 Clear</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // ========= IDENTIFIERS (45 lists): A..Z (26) + AA..AS (19) =========
+    function makeLabels(){
+      const singles = Array.from('ABCDEFGHIJKLMNOPQRSTUVWXYZ'); // 26
+      const extras = [];
+      const second = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+      // AA..AZ (26), but we only need 19 to reach 45 in total -> AA..AS (19)
+      for (let i=0;i<19;i++){ extras.push('A' + second[i]); }
+      return singles.concat(extras); // 45 labels
+    }
+    const LABELS = makeLabels();                 // 45 labels total
+    const PAGE1 = LABELS.slice(0,15);            // A..O
+    const PAGE2 = LABELS.slice(15,30);           // P..AD
+    const PAGE3 = LABELS.slice(30,45);           // AE..AS
+
+    // ========= STATE =========
+    let currentList = LABELS[0];
+
+    // lists: {label: [items]} ; names: {label: 'custom name'} ; meta: {label: {itemText: timestamp}}
+    let lists = Object.fromEntries(LABELS.map(l => [l, []]));
+    let names = Object.fromEntries(LABELS.map(l => [l, '']));
+    let meta  = Object.fromEntries(LABELS.map(l => [l, {}]));
+
+    let selectedOrder = [];                      // selection used by all modes
+    let mode = 'sequential';                     // 'sequential' | 'combine' | 'single'
+    let showTags = false;
+
+    let autoPlay = false;
+    let soundOn = true;
+    let minTime = 10, maxTime = 20;
+    let timer = null;
+
+    let volume = 1.0, rate = 1.0;
+    let randomVoicePerPrompt = false, voicePool = [];
+
+    // ========= ELEMENTS =========
+    const pages = document.getElementById('pages');
+
+    const autoBtn = document.getElementById('autoBtn');
+    const soundBtn = document.getElementById('soundBtn');
+
+    const output = document.getElementById('output');
+
+    // List page grids + outputs
+    const grids = {
+      listGrid1: { ids: PAGE1, el: document.getElementById('listGrid1'), reset: document.getElementById('resetSeq1'),
+                   outBox: document.getElementById('outBox1'), outText: document.getElementById('outText1'), bigOut: document.getElementById('bigOut1') },
+      listGrid2: { ids: PAGE2, el: document.getElementById('listGrid2'), reset: document.getElementById('resetSeq2'),
+                   outBox: document.getElementById('outBox2'), outText: document.getElementById('outText2'), bigOut: document.getElementById('bigOut2') },
+      listGrid3: { ids: PAGE3, el: document.getElementById('listGrid3'), reset: document.getElementById('resetSeq3'),
+                   outBox: document.getElementById('outBox3'), outText: document.getElementById('outText3'), bigOut: document.getElementById('bigOut3') }
+    };
+
+    // Mode rows
+    const modeRows = [
+      document.getElementById('modeRow1'),
+      document.getElementById('modeRow2'),
+      document.getElementById('modeRow3')
+    ];
+
+    // Mini timer rows
+    const miniTimerRows = [
+      document.getElementById('miniTimers1'),
+      document.getElementById('miniTimers1b'),
+      document.getElementById('miniTimers2'),
+      document.getElementById('miniTimers2b'),
+      document.getElementById('miniTimers3'),
+      document.getElementById('miniTimers3b'),
+    ];
+
+    // Controls page elements
+    const t5=document.getElementById('t5'), t10=document.getElementById('t10'), t30=document.getElementById('t30'),
+          t90=document.getElementById('t90'), t150=document.getElementById('t150');
+    const minCustom=document.getElementById('minCustom'), maxCustom=document.getElementById('maxCustom'),
+          applyCustom=document.getElementById('applyCustom');
+
+    const volRange=document.getElementById('volRange'), rateRange=document.getElementById('rateRange');
+    const volReadout=document.getElementById('volReadout'), rateReadout=document.getElementById('rateReadout');
+    const voiceRandom=document.getElementById('voiceRandom'), tagsBtn=document.getElementById('tagsBtn');
+
+    // Editor elements
+    const editorPage=document.getElementById('editorPage');
+    const editorLetter=document.getElementById('editorLetter');
+    const listNameInput=document.getElementById('listName');
+    const listTextarea=document.getElementById('listTextarea');
+    const saveListBtn=document.getElementById('saveList');
+    const cancelEditBtn=document.getElementById('cancelEdit');
+    const dedupeBtn=document.getElementById('dedupe');
+    const sortAZBtn=document.getElementById('sortAZ');
+    const sortByTimeBtn=document.getElementById('sortByTime');
+    const clearListBtn=document.getElementById('clearList');
+
+    // ========= COLORS (repeat palette across labels) =========
+    const PALETTE = [
+      '#2ecc71','#3498db','#e67e22','#9b59b6','#e74c3c',
+      '#1abc9c','#f1c40f','#95a5a6','#ff6b6b','#bdc3c7',
+      '#00bcd4','#ff9800','#7cb342','#ffc107','#ff4081',
+      '#8e44ad','#16a085','#d35400','#27ae60','#2980b9',
+      '#ec407a','#26a69a','#ab47bc','#66bb6a','#ffa726'
+    ];
+    (function injectColors(){
+      const css = LABELS.map((lab,i)=>`.w${lab}{color:${PALETTE[i%PALETTE.length]}} .pill-${lab}{background:${PALETTE[i%PALETTE.length]}}`).join('\n');
+      const st = document.createElement('style'); st.textContent = css; document.head.appendChild(st);
+    })();
+
+    // ========= BUILD LIST GRIDS (with triple-tap) =========
+    function buildGrid(gridKey){
+      const g = grids[gridKey];
+      g.el.innerHTML = '';
+      g.ids.forEach(lab => {
+        const btn = document.createElement('button');
+        btn.className = 'listBtn';
+        btn.id = `lb_${lab}`;
+        btn.dataset.label = lab;
+
+        const pill = document.createElement('div');
+        pill.className = `pill pill-${lab}`;
+        pill.textContent = lab;
+
+        const nameSpan = document.createElement('div');
+        nameSpan.className = 'lname';
+        nameSpan.textContent = names[lab] || '';
+
+        const badge = document.createElement('div');
+        badge.className = 'badge';
+
+        btn.appendChild(pill);
+        btn.appendChild(nameSpan);
+        btn.appendChild(badge);
+
+        // triple-tap open editor; single tap select/prompt
+        const TAP_GAP = 300;
+        btn._tapCount = 0; btn._lastTap = 0; btn._singleTimer = null;
+
+        btn.addEventListener('click', () => {
+          const now = Date.now();
+          if (now - btn._lastTap <= TAP_GAP) btn._tapCount += 1; else btn._tapCount = 1;
+          btn._lastTap = now;
+
+          clearTimeout(btn._singleTimer);
+          if (btn._tapCount >= 3){
+            btn._tapCount = 0;
+            openEditor(lab);
+            return;
+          }
+          btn._singleTimer = setTimeout(()=>{
+            if (btn._tapCount === 1) onListButtonTap(lab);
+            btn._tapCount = 0;
+          }, TAP_GAP + 40);
+        });
+
+        g.el.appendChild(btn);
+      });
+
+      // reset button
+      g.reset.addEventListener('click', ()=>{
+        selectedOrder = [];
+        refreshSelectionBadges();
+        generatePrompt();
+      });
+    }
+
+    function refreshAllNames(){
+      LABELS.forEach(lab=>{
+        const el = document.querySelector(`#lb_${CSS.escape(lab)} .lname`);
+        if (el) el.textContent = names[lab] || '';
+      });
+    }
+
+    function refreshSelectionBadges(){
+      LABELS.forEach(lab=>{
+        const btn = document.getElementById(`lb_${lab}`);
+        if (!btn) return;
+        const badge = btn.querySelector('.badge');
+        const idx = selectedOrder.indexOf(lab);
+        if (mode === 'sequential'){
+          if (idx>=0){ btn.classList.add('active'); badge.textContent = String(idx+1); }
+          else { btn.classList.remove('active'); badge.textContent=''; }
+        } else if (mode === 'combine'){
+          if (idx>=0){ btn.classList.add('active'); badge.textContent = '✓'; }
+          else { btn.classList.remove('active'); badge.textContent=''; }
+        } else {
+          if (selectedOrder[0]===lab){ btn.classList.add('active'); badge.textContent = '●'; }
+          else { btn.classList.remove('active'); badge.textContent=''; }
+        }
+      });
+      localStorage.setItem('selectedOrder', JSON.stringify(selectedOrder));
+    }
+
+    function onListButtonTap(lab){
+      if (mode==='single'){
+        selectedOrder = [lab];
+        refreshSelectionBadges();
+        generatePromptFrom(lab);
+      } else {
+        const idx = selectedOrder.indexOf(lab);
+        if (idx>=0) selectedOrder.splice(idx,1); else selectedOrder.push(lab);
+        refreshSelectionBadges();
+        generatePrompt();
+      }
+    }
+
+    // ========= EDITOR =========
+    function ensureMeta(lab){
+      const m = meta[lab] || (meta[lab] = {});
+      const arr = lists[lab] || [];
+      let t = Date.now();
+      for (let i=0;i<arr.length;i++){
+        const v = arr[i];
+        if (!m.hasOwnProperty(v)) m[v] = t + i;
+      }
+    }
+
+    function openEditor(lab){
+      currentList = lab;
+      ensureMeta(lab);
+      editorLetter.textContent = lab;
+      listNameInput.value = names[lab] || '';
+      listTextarea.value = (lists[lab]||[]).join('\n');
+      editorPage.style.display = 'flex';
+    }
+    function closeEditor(){ editorPage.style.display='none'; }
+    cancelEditBtn.addEventListener('click', closeEditor);
+
+    saveListBtn.addEventListener('click', ()=>{
+      const lab = currentList;
+      names[lab] = (listNameInput.value || '').trim();
+      localStorage.setItem('promptListNames', JSON.stringify(names));
+      refreshAllNames();
+
+      const oldMeta = meta[lab] || {};
+      const now = Date.now();
+      const lines = listTextarea.value.split('\n').map(cleanItem).filter(Boolean);
+      const newMeta = {};
+      lines.forEach((v,i)=>{ newMeta[v] = oldMeta.hasOwnProperty(v) ? oldMeta[v] : (now+i); });
+      meta[lab] = newMeta;
+      lists[lab] = lines;
+
+      localStorage.setItem('promptList_'+lab, JSON.stringify(lists[lab]));
+      localStorage.setItem('promptListMeta_'+lab, JSON.stringify(meta[lab]));
+
+      closeEditor();
+      generatePrompt();
+    });
+
+    dedupeBtn.addEventListener('click', ()=>{
+      const seen=new Set(), out=[];
+      listTextarea.value.split('\n').forEach(line=>{
+        const c = cleanItem(line);
+        if (c && !seen.has(c)){ seen.add(c); out.push(c); }
+      });
+      listTextarea.value = out.join('\n');
+    });
+    sortAZBtn.addEventListener('click', ()=>{
+      const arr = listTextarea.value.split('\n').map(cleanItem).filter(Boolean);
+      arr.sort((a,b)=>a.localeCompare(b));
+      listTextarea.value = arr.join('\n');
+    });
+    sortByTimeBtn.addEventListener('click', ()=>{
+      const lab = currentList;
+      ensureMeta(lab);
+      const m = meta[lab];
+      const arr = listTextarea.value.split('\n').map(cleanItem).filter(Boolean);
+      const withIdx = arr.map((v,idx)=>({v,idx,t: m.hasOwnProperty(v) ? m[v] : Number.MAX_SAFE_INTEGER}));
+      withIdx.sort((a,b)=> a.t===b.t ? a.idx-b.idx : a.t-b.t);
+      listTextarea.value = withIdx.map(o=>o.v).join('\n');
+    });
+    clearListBtn.addEventListener('click', ()=>{
+      if (confirm('Clear all entries?')) listTextarea.value='';
+    });
+
+    // ========= PROMPTS =========
+    function randFrom(arr){ return arr[Math.floor(Math.random()*arr.length)]; }
+    function getRandomFrom(lab){
+      const list = lists[lab] || [];
+      return list.length ? randFrom(list) : null;
+    }
+    function cleanItem(s){ return String(s).replace(/^\s*-\s*/, '').replace(/\s+/g,' ').trim(); }
+
+    function getTag(lab){ const nm = names[lab]; return (nm && nm.trim()) ? nm.trim() : lab; }
+    function wordHtml(lab, txt){
+      const tag = showTags ? `<span class="tag">${escapeHtml(getTag(lab))}</span>` : '';
+      return `<span class="w${lab}">${escapeHtml(txt)}${tag}</span>`;
+    }
+
+    function escapeHtml(s){
+      return s.replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+    }
+
+    function setAllOutputs(html){
+      // Center prompt
+      output.innerHTML = html;
+      // List page docks + prompt-only big outputs
+      Object.values(grids).forEach(g=>{
+        g.outText.innerHTML = html;
+        g.bigOut.innerHTML = html;
+      });
+    }
+
+    function generatePrompt(){
+      let html = '';
+      if (mode==='sequential'){
+        const arr = selectedOrder.length ? selectedOrder : [currentList];
+        const parts = [];
+        for (const lab of arr){
+          const it = getRandomFrom(lab);
+          if (it) parts.push(wordHtml(lab, cleanItem(it)));
+        }
+        html = parts.length ? parts.join(' ') : 'No prompts in selected lists';
+      } else if (mode==='combine'){
+        const pool = selectedOrder.length ? selectedOrder : [currentList];
+        const lab = randFrom(pool);
+        const it = getRandomFrom(lab);
+        html = it ? wordHtml(lab, cleanItem(it)) : `[No items in ${getTag(lab)}]`;
+      } else { // single
+        const lab = selectedOrder[0] || currentList;
+        const it = getRandomFrom(lab);
+        html = it ? wordHtml(lab, cleanItem(it)) : `[No items in ${getTag(lab)}]`;
+      }
+      setAllOutputs(html);
+      if (soundOn) speak(stripHtml(html));
+    }
+
+    function generatePromptFrom(lab){
+      const it = getRandomFrom(lab);
+      const html = it ? wordHtml(lab, cleanItem(it)) : `[No items in ${getTag(lab)}]`;
+      setAllOutputs(html);
+      if (soundOn) speak(stripHtml(html));
+    }
+
+    function stripHtml(h){
+      const tmp = document.createElement('div');
+      tmp.innerHTML = h;
+      return tmp.textContent || tmp.innerText || '';
+    }
+
+    // ========= AUDIO =========
+    function speak(text){
+      try{
+        const u = new SpeechSynthesisUtterance(text);
+        u.lang='en-US'; u.volume=volume; u.rate=rate;
+        const all=window.speechSynthesis.getVoices();
+        if (randomVoicePerPrompt && voicePool.length){
+          const chosen = randFrom(voicePool);
+          const match = all.find(v=>v.name===chosen.name);
+          if (match) u.voice = match;
+        } else {
+          const v = all.find(v => (v.lang||'').toLowerCase().startsWith('en'));
+          if (v) u.voice = v;
+        }
+        speechSynthesis.cancel(); speechSynthesis.speak(u);
+      } catch(e){}
+    }
+    function setupVoices(){
+      function buildPool(all){
+        const en = all.filter(v => (v.lang||'').toLowerCase().startsWith('en'));
+        const picks=[];
+        function pick(list){ for (const v of list){ if (picks.length>=5) break; if(!picks.find(p=>p.name===v.name)) picks.push(v); } }
+        const female = en.filter(v=>/female/i.test(v.name));
+        const male   = en.filter(v=>/male/i.test(v.name));
+        const us = en.filter(v=>/us/i.test(v.lang)||/US/i.test(v.name));
+        const uk = en.filter(v=>/gb|uk/i.test(v.lang)||/UK|English UK/i.test(v.name));
+        pick([...female,...male,...us,...uk]); pick(en); if(!picks.length) pick(all);
+        return picks.slice(0,5);
+      }
+      function refresh(){
+        const all=window.speechSynthesis.getVoices();
+        if (!all.length) return;
+        voicePool = buildPool(all);
+      }
+      window.speechSynthesis.onvoiceschanged = refresh;
+      refresh();
+    }
+
+    // ========= CONTROLS =========
+    function updateAutoBtn(){ autoBtn.textContent = autoPlay ? '⏸ Stop' : '▶️ Start'; }
+    function updateSoundBtn(){ soundBtn.textContent = soundOn ? '🔊 Sound: ON' : '🔇 Sound: OFF'; }
+    autoBtn.addEventListener('click', ()=>{ autoPlay=!autoPlay; localStorage.setItem('autoPlay',autoPlay); updateAutoBtn(); if(autoPlay) startTimer(); else stopTimer(); });
+    soundBtn.addEventListener('click', ()=>{ soundOn=!soundOn; localStorage.setItem('soundOn',soundOn); updateSoundBtn(); });
+
+    // Mode toggle rows
+    function bindModeRow(row){
+      row.querySelectorAll('button[data-mode]').forEach(b=>{
+        b.addEventListener('click', ()=>{
+          mode = b.dataset.mode;
+          localStorage.setItem('mode', mode);
+          modeRows.forEach(r=>{
+            r.querySelectorAll('button[data-mode]').forEach(x=>x.classList.toggle('active', x.dataset.mode===mode));
+          });
+          if (mode==='single'){
+            if (!selectedOrder.length) selectedOrder=[currentList];
+            else selectedOrder=[selectedOrder[0]];
+          }
+          refreshSelectionBadges();
+          generatePrompt();
+        });
+      });
+    }
+    modeRows.forEach(bindModeRow);
+
+    // Mini timer rows (mirror presets)
+    function setPreset(min,max){
+      minTime=min; maxTime=max;
+      localStorage.setItem('minTime', String(min));
+      localStorage.setItem('maxTime', String(max));
+      // reflect active on controls page and all mini rows
+      [t5,t10,t30,t90,t150].forEach(b=>b.classList.remove('active'));
+      if (min===5 && max===10) t5.classList.add('active');
+      else if (min===10 && max===20) t10.classList.add('active');
+      else if (min===30 && max===60) t30.classList.add('active');
+      else if (min===90 && max===120) t90.classList.add('active');
+      else if (min===150 && max===300) t150.classList.add('active');
+
+      miniTimerRows.forEach(row=>{
+        row.querySelectorAll('button').forEach(b=>{
+          const [mi,ma] = b.dataset.preset.split('-').map(n=>parseInt(n,10));
+          b.classList.toggle('active', mi===min && ma===max);
+        });
+      });
+      if (autoPlay) startTimer();
+    }
+    function bindMiniTimers(row){
+      row.querySelectorAll('button').forEach(b=>{
+        b.addEventListener('click', ()=>{
+          const [mi,ma] = b.dataset.preset.split('-').map(n=>parseInt(n,10));
+          setPreset(mi,ma);
+        });
+      });
+    }
+    miniTimerRows.forEach(bindMiniTimers);
+
+    // Controls page timing
+    function highlightTiming(){ /* handled in setPreset to keep in sync */ }
+    t5.addEventListener('click', ()=>setPreset(5,10));
+    t10.addEventListener('click', ()=>setPreset(10,20));
+    t30.addEventListener('click', ()=>setPreset(30,60));
+    t90.addEventListener('click', ()=>setPreset(90,120));
+    t150.addEventListener('click',()=>setPreset(150,300));
+    applyCustom.addEventListener('click', ()=>{
+      const mi = parseInt(minCustom.value,10), ma = parseInt(maxCustom.value,10);
+      if (mi>0 && ma>=mi) setPreset(mi,ma);
+    });
+
+    // Volume / rate / toggles
+    volRange.addEventListener('input', ()=>{ volume = Math.max(0, Math.min(1, volRange.value/100)); volReadout.textContent = 'Volume: ' + Math.round(volume*100) + '%'; localStorage.setItem('volume', volume.toFixed(3)); });
+    rateRange.addEventListener('input', ()=>{ rate = Math.max(0.6, Math.min(1.6, rateRange.value/100)); rateReadout.textContent = 'Rate: ' + rate.toFixed(2) + '×'; localStorage.setItem('rate', rate.toFixed(3)); });
+    voiceRandom.addEventListener('click', ()=>{ randomVoicePerPrompt = !randomVoicePerPrompt; voiceRandom.textContent = randomVoicePerPrompt ? '🎲 Voice: ON' : '🎲 Voice: OFF'; localStorage.setItem('randomVoicePerPrompt', randomVoicePerPrompt); });
+    function updateTagsBtn(){ tagsBtn.textContent = showTags ? '🏷 Tags: ON' : '🏷 Tags: OFF'; }
+    tagsBtn.addEventListener('click', ()=>{ showTags=!showTags; localStorage.setItem('showTags', showTags); updateTagsBtn(); generatePrompt(); });
+
+    // Autoplay timer
+    function startTimer(){ stopTimer(); const delay=(Math.floor(Math.random()*(maxTime-minTime+1))+minTime)*1000; timer=setTimeout(()=>{ generatePrompt(); if (autoPlay) startTimer(); }, delay); }
+    function stopTimer(){ if (timer) clearTimeout(timer); timer=null; }
+
+    // Tap/Click to advance prompts
+    document.getElementById('tapZone').addEventListener('click', (e)=>{ if (!e.target.closest('button,input,textarea,select')) generatePrompt(); });
+    // list page docks & prompt-only panes: tap to advance
+    Object.values(grids).forEach(g=>{
+      g.outBox.addEventListener('click', (e)=>{ if (!e.target.closest('button,input,textarea,select')) generatePrompt(); });
+    });
+    ['promptOnly1','promptOnly2','promptOnly3'].forEach(id=>{
+      const el = document.getElementById(id);
+      el.addEventListener('click', (e)=>{ if (!e.target.closest('button,input,textarea,select')) generatePrompt(); });
+    });
+
+    // Keyboard: any key advances (unless typing / editor open)
+    function editorOpen(){ return editorPage && editorPage.style.display==='flex'; }
+    function isEditableTarget(el){ return el && (el.tagName==='INPUT' || el.tagName==='TEXTAREA' || el.tagName==='SELECT' || el.isContentEditable || el.closest('#editorPage')); }
+    document.addEventListener('keydown', (e)=>{
+      if (e.ctrlKey||e.metaKey||e.altKey) return;
+      if (isEditableTarget(e.target) || editorOpen()) return;
+      if (e.key===' ' || e.code==='Space') e.preventDefault();
+      generatePrompt();
+    });
+
+    // Import/Export
+    const exportBtn=document.getElementById('exportBtn'), importBtn=document.getElementById('importBtn'), importFile=document.getElementById('importFile');
+    exportBtn.addEventListener('click', ()=>{
+      const data = {
+        version: 9,
+        labels: LABELS, lists, names, meta,
+        selectedOrder, mode, showTags,
+        settings:{ autoPlay, soundOn, minTime, maxTime, volume, rate, randomVoicePerPrompt }
+      };
+      const blob = new Blob([JSON.stringify(data,null,2)], {type:'application/json'});
+      const a = document.createElement('a'); a.href = URL.createObjectURL(blob);
+      const ts = new Date().toISOString().replace(/[:T]/g,'-').slice(0,19);
+      a.download = `prompt-generator-${ts}.json`; document.body.appendChild(a); a.click();
+      setTimeout(()=>{ URL.revokeObjectURL(a.href); a.remove(); },0);
+    });
+    importBtn.addEventListener('click',()=>importFile.click());
+    importFile.addEventListener('change',()=>{
+      const f = importFile.files && importFile.files[0]; if (!f) return;
+      const reader = new FileReader();
+      reader.onload = ()=>{
+        try{
+          const data = JSON.parse(reader.result);
+          if (data.lists){
+            LABELS.forEach(lab=>{
+              lists[lab] = Array.isArray(data.lists[lab]) ? data.lists[lab].map(cleanItem).filter(Boolean) : [];
+              localStorage.setItem('promptList_'+lab, JSON.stringify(lists[lab]));
+            });
+          }
+          if (data.names){
+            names = {...Object.fromEntries(LABELS.map(l=>[l,''])), ...data.names};
+            localStorage.setItem('promptListNames', JSON.stringify(names));
+            refreshAllNames();
+          }
+          if (data.meta){
+            LABELS.forEach(lab=>{
+              const m = data.meta[lab];
+              meta[lab] = m && typeof m==='object' ? m : {};
+              localStorage.setItem('promptListMeta_'+lab, JSON.stringify(meta[lab]));
+            });
+          }
+          if (Array.isArray(data.selectedOrder)) selectedOrder = data.selectedOrder.filter(x=>LABELS.includes(x));
+          if (['sequential','combine','single'].includes(data.mode)) mode = data.mode;
+          showTags = !!data.showTags;
+
+          if (data.settings){
+            const s=data.settings;
+            autoPlay=!!s.autoPlay; soundOn=!!s.soundOn;
+            if (Number.isFinite(s.minTime)) minTime=s.minTime;
+            if (Number.isFinite(s.maxTime)) maxTime=s.maxTime;
+            if (typeof s.volume==='number') volume=Math.max(0,Math.min(1,s.volume));
+            if (typeof s.rate==='number') rate=Math.max(0.6,Math.min(1.6,s.rate));
+            randomVoicePerPrompt=!!s.randomVoicePerPrompt;
+          }
+          updateAutoBtn(); updateSoundBtn(); updateTagsBtn();
+          volRange.value=Math.round(volume*100); volReadout.textContent='Volume: '+Math.round(volume*100)+'%';
+          rateRange.value=Math.round(rate*100); rateReadout.textContent='Rate: '+rate.toFixed(2)+'×';
+          modeRows.forEach(r=>{
+            r.querySelectorAll('button[data-mode]').forEach(b=>b.classList.toggle('active', b.dataset.mode===mode));
+          });
+          miniTimerRows.forEach(bindMiniTimers);
+          refreshSelectionBadges(); generatePrompt();
+          alert('Import complete.');
+        }catch(err){ alert('Import failed: '+err.message); }
+        importFile.value='';
+      };
+      reader.readAsText(f);
+    });
+
+    // ========= SWIPE HORIZONTAL =========
+    let pageIndex = 1; // 0=left,1=center,2=list1,3=list2,4=list3
+    function applyPage(){ pages.style.transform = `translateX(${-(pageIndex)*100}vw)`; document.body.className = 'page-' + pageIndex; }
+    function goLeft(){ pageIndex = Math.max(0, pageIndex-1); applyPage(); }
+    function goRight(){ pageIndex = Math.min(4, pageIndex+1); applyPage(); }
+
+    let sx=0, sy=0, moved=false;
+    const SWIPE_X=60, SWIPE_Y=60;
+    pages.addEventListener('touchstart', (e)=>{
+      if (e.touches.length!==1) return;
+      sx=e.touches[0].clientX; sy=e.touches[0].clientY; moved=false;
+    }, {passive:true});
+    pages.addEventListener('touchmove', ()=>{ moved=true; }, {passive:true});
+    pages.addEventListener('touchend', (e)=>{
+      if (!moved) return;
+      const dx = e.changedTouches[0].clientX - sx;
+      const dy = Math.abs(e.changedTouches[0].clientY - sy);
+      if (dy > SWIPE_Y) return;
+      if (dx > SWIPE_X) goLeft(); else if (dx < -SWIPE_X) goRight();
+    }, {passive:true});
+
+    // ========= LOAD / BOOT =========
+    function loadState(){
+      // lists & meta
+      LABELS.forEach(lab=>{
+        try{
+          const raw = localStorage.getItem('promptList_'+lab);
+          if (raw) lists[lab] = JSON.parse(raw) || [];
+        }catch{}
+        try{
+          const mraw = localStorage.getItem('promptListMeta_'+lab);
+          meta[lab] = mraw ? JSON.parse(mraw) || {} : {};
+        }catch{ meta[lab] = {}; }
+        if (!meta[lab] || typeof meta[lab] !== 'object') meta[lab] = {};
+        if ((lists[lab]||[]).length){
+          let base = Date.now();
+          (lists[lab]||[]).forEach((v,i)=>{ if (!meta[lab].hasOwnProperty(v)) meta[lab][v]=base+i; });
+        }
+      });
+
+      // names
+      try{
+        const sn = JSON.parse(localStorage.getItem('promptListNames')||'{}');
+        names = {...names, ...sn};
+      }catch{}
+
+      // selection & settings
+      try{
+        const sel = JSON.parse(localStorage.getItem('selectedOrder')||'[]');
+        selectedOrder = sel.filter(x=>LABELS.includes(x));
+      }catch{}
+      autoPlay = localStorage.getItem('autoPlay') === 'true';
+      soundOn = localStorage.getItem('soundOn') !== 'false';
+      const v = parseFloat(localStorage.getItem('volume')); if (!isNaN(v)) volume = Math.max(0,Math.min(1,v));
+      const r = parseFloat(localStorage.getItem('rate')); if (!isNaN(r)) rate = Math.max(0.6,Math.min(1.6,r));
+      randomVoicePerPrompt = localStorage.getItem('randomVoicePerPrompt') === 'true';
+      showTags = localStorage.getItem('showTags') === 'true';
+      const mt = parseInt(localStorage.getItem('minTime'),10); if (Number.isFinite(mt)) minTime = mt;
+      const mx = parseInt(localStorage.getItem('maxTime'),10); if (Number.isFinite(mx)) maxTime = mx;
+      const savedMode = localStorage.getItem('mode');
+      if (['sequential','combine','single'].includes(savedMode)) mode = savedMode;
+    }
+
+    function init(){
+      loadState();
+      // build grids
+      buildGrid('listGrid1');
+      buildGrid('listGrid2');
+      buildGrid('listGrid3');
+      refreshAllNames();
+      refreshSelectionBadges();
+
+      // voice + UI
+      setupVoices();
+      updateAutoBtn(); updateSoundBtn(); updateTagsBtn();
+      volRange.value = Math.round(volume*100); volReadout.textContent = 'Volume: ' + Math.round(volume*100) + '%';
+      rateRange.value = Math.round(rate*100);  rateReadout.textContent = 'Rate: ' + rate.toFixed(2) + '×';
+
+      // set preset buttons active across all
+      setPreset(minTime, maxTime); // also marks active buttons
+
+      applyPage(); // center
+      generatePrompt();
+      if (autoPlay) startTimer();
+    }
+    init();
+  </script>
+</body>
+</html>

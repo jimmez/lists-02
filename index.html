@@ -29,10 +29,13 @@
       position: fixed; top: 6px; left: 8px; z-index: 1001; display:flex; gap:8px; align-items:center;
     }
     #autoBtn, #soundBtn {
-      background:#1a1a1a; border:1px solid #333; color:#fff; border-radius:10px; padding:6px 10px; font-size:13px; cursor:pointer;
+      background:#1a1a1a; border:1px solid #333; color:#fff; border-radius:12px; padding:8px 14px; font-size:16px; cursor:pointer;
     }
+    /* Color states for Start/Stop */
+    #autoBtn.start { background:#0ea35b; border-color:#0a7c44; }
+    #autoBtn.stop  { background:#d84040; border-color:#ab1f1f; }
     /* Larger Start/Stop on center prompt page */
-    body.page-1 #autoBtn { font-size:18px; padding:10px 16px; border-radius:12px; }
+    body.page-1 #autoBtn { font-size:20px; padding:12px 18px; border-radius:14px; }
 
     /* Horizontal pages (0..4 => 5 pages) */
     #pages {
@@ -44,6 +47,18 @@
       width:100vw; height:100vh; padding: var(--topPad) 12px 12px;
       display:flex; flex-direction:column; align-items:center; overflow:hidden; /* inner scrollers handle overflow */
     }
+
+    /* --- Top timer bars on list pages (below topbar) --- */
+    .topTimerBar {
+      width:100%; max-width: var(--maxw);
+      display:flex; gap:6px; flex-wrap:wrap; align-items:center;
+      margin-bottom:8px;
+    }
+    .topTimerBar .timers button {
+      background:#1a1a1a; border:1px solid #333; color:#fff; border-radius:10px;
+      padding:6px 10px; font-size:13px; cursor:pointer;
+    }
+    .topTimerBar .timers button.active { background:#0a84ff; border-color:#0a84ff; }
 
     /* CENTER (Prompt) */
     #promptPage main {
@@ -72,7 +87,7 @@
     }
     .timing-row button.active, .mode-row button.active { background:#0a84ff; }
 
-    /* LIST PAGES (3x): each page has an inner vertical scroller with two panes (list + prompt-only) */
+    /* LIST PAGES (3x): stack with two panes (list + prompt-only) */
     .stack {
       position: relative; width:100%; height:100%;
       overflow:auto; scroll-snap-type: y mandatory;
@@ -81,11 +96,6 @@
       scroll-snap-align: start; min-height: var(--paneMinH);
       display:flex; flex-direction:column; align-items:center;
     }
-
-    .miniControls { width:100%; max-width: var(--maxw); margin: 4px 0 8px; display:flex; flex-wrap:wrap; gap:8px; align-items:center; }
-    .miniControls .timers { display:flex; gap:6px; flex-wrap:wrap; }
-    .miniControls .timers button { padding:4px 8px; font-size:12px; border-radius:8px; background:#1a1a1a; border:1px solid #333; }
-    .miniControls .timers button.active { background:#0a84ff; }
 
     .listHelp { font-size:12px; color:#aaa; margin:4px 0 8px; text-align:center; }
 
@@ -180,7 +190,7 @@
 
   <!-- Global topbar -->
   <div id="topbar">
-    <button id="autoBtn" title="Start/Stop autoplay">▶️ Start</button>
+    <button id="autoBtn" class="start" title="Start/Stop autoplay">▶️ Start</button>
     <button id="soundBtn" title="Toggle audio">🔊 Sound: ON</button>
   </div>
 
@@ -249,18 +259,18 @@
 
     <!-- PAGE 2: List Page 1 (A..O) + Prompt-only subpage -->
     <section class="page" id="listPage1">
+      <div class="topTimerBar">
+        <div class="timers" id="topTimers1">
+          <button data-preset="5-10">5–10s</button>
+          <button data-preset="10-20" class="active">10–20s</button>
+          <button data-preset="30-60">30–60s</button>
+          <button data-preset="90-120">90–120s</button>
+          <button data-preset="150-300">150–300s</button>
+        </div>
+      </div>
       <div class="stack" id="stack1">
         <!-- Pane 1: List view -->
         <div class="pane" id="listPane1">
-          <div class="miniControls">
-            <div class="timers" id="miniTimers1">
-              <button data-preset="5-10">5–10s</button>
-              <button data-preset="10-20" class="active">10–20s</button>
-              <button data-preset="30-60">30–60s</button>
-              <button data-preset="90-120">90–120s</button>
-              <button data-preset="150-300">150–300s</button>
-            </div>
-          </div>
           <div class="listHelp">Tap to select; <strong>triple-tap</strong> to edit. Badge shows order (Sequential), ✓ (Combine), ● (Single). Scroll down for Prompt-only.</div>
           <div class="gridWrap">
             <div class="listGrid" id="listGrid1"></div>
@@ -282,15 +292,6 @@
         <!-- Pane 2: Prompt-only -->
         <div class="pane" id="promptPane1">
           <div class="promptOnly" id="promptOnly1" title="Tap to advance">
-            <div class="miniControls">
-              <div class="timers" id="miniTimers1b">
-                <button data-preset="5-10">5–10s</button>
-                <button data-preset="10-20" class="active">10–20s</button>
-                <button data-preset="30-60">30–60s</button>
-                <button data-preset="90-120">90–120s</button>
-                <button data-preset="150-300">150–300s</button>
-              </div>
-            </div>
             <div class="bigOut" id="bigOut1">Your prompt will appear here.</div>
             <div class="hint small">Scroll up for lists • Tap for next</div>
           </div>
@@ -300,17 +301,17 @@
 
     <!-- PAGE 3: List Page 2 (P..AD) + Prompt-only subpage -->
     <section class="page" id="listPage2">
+      <div class="topTimerBar">
+        <div class="timers" id="topTimers2">
+          <button data-preset="5-10">5–10s</button>
+          <button data-preset="10-20" class="active">10–20s</button>
+          <button data-preset="30-60">30–60s</button>
+          <button data-preset="90-120">90–120s</button>
+          <button data-preset="150-300">150–300s</button>
+        </div>
+      </div>
       <div class="stack" id="stack2">
         <div class="pane" id="listPane2">
-          <div class="miniControls">
-            <div class="timers" id="miniTimers2">
-              <button data-preset="5-10">5–10s</button>
-              <button data-preset="10-20" class="active">10–20s</button>
-              <button data-preset="30-60">30–60s</button>
-              <button data-preset="90-120">90–120s</button>
-              <button data-preset="150-300">150–300s</button>
-            </div>
-          </div>
           <div class="listHelp">Tap to select; <strong>triple-tap</strong> to edit. Scroll down for Prompt-only.</div>
           <div class="gridWrap">
             <div class="listGrid" id="listGrid2"></div>
@@ -331,15 +332,6 @@
 
         <div class="pane" id="promptPane2">
           <div class="promptOnly" id="promptOnly2" title="Tap to advance">
-            <div class="miniControls">
-              <div class="timers" id="miniTimers2b">
-                <button data-preset="5-10">5–10s</button>
-                <button data-preset="10-20" class="active">10–20s</button>
-                <button data-preset="30-60">30–60s</button>
-                <button data-preset="90-120">90–120s</button>
-                <button data-preset="150-300">150–300s</button>
-              </div>
-            </div>
             <div class="bigOut" id="bigOut2">Your prompt will appear here.</div>
             <div class="hint small">Scroll up for lists • Tap for next</div>
           </div>
@@ -349,17 +341,17 @@
 
     <!-- PAGE 4: List Page 3 (AE..AS) + Prompt-only subpage -->
     <section class="page" id="listPage3">
+      <div class="topTimerBar">
+        <div class="timers" id="topTimers3">
+          <button data-preset="5-10">5–10s</button>
+          <button data-preset="10-20" class="active">10–20s</button>
+          <button data-preset="30-60">30–60s</button>
+          <button data-preset="90-120">90–120s</button>
+          <button data-preset="150-300">150–300s</button>
+        </div>
+      </div>
       <div class="stack" id="stack3">
         <div class="pane" id="listPane3">
-          <div class="miniControls">
-            <div class="timers" id="miniTimers3">
-              <button data-preset="5-10">5–10s</button>
-              <button data-preset="10-20" class="active">10–20s</button>
-              <button data-preset="30-60">30–60s</button>
-              <button data-preset="90-120">90–120s</button>
-              <button data-preset="150-300">150–300s</button>
-            </div>
-          </div>
           <div class="listHelp">Tap to select; <strong>triple-tap</strong> to edit. Scroll down for Prompt-only.</div>
           <div class="gridWrap">
             <div class="listGrid" id="listGrid3"></div>
@@ -380,15 +372,6 @@
 
         <div class="pane" id="promptPane3">
           <div class="promptOnly" id="promptOnly3" title="Tap to advance">
-            <div class="miniControls">
-              <div class="timers" id="miniTimers3b">
-                <button data-preset="5-10">5–10s</button>
-                <button data-preset="10-20" class="active">10–20s</button>
-                <button data-preset="30-60">30–60s</button>
-                <button data-preset="90-120">90–120s</button>
-                <button data-preset="150-300">150–300s</button>
-              </div>
-            </div>
             <div class="bigOut" id="bigOut3">Your prompt will appear here.</div>
             <div class="hint small">Scroll up for lists • Tap for next</div>
           </div>
@@ -478,14 +461,11 @@
       document.getElementById('modeRow3')
     ];
 
-    // Mini timer rows
-    const miniTimerRows = [
-      document.getElementById('miniTimers1'),
-      document.getElementById('miniTimers1b'),
-      document.getElementById('miniTimers2'),
-      document.getElementById('miniTimers2b'),
-      document.getElementById('miniTimers3'),
-      document.getElementById('miniTimers3b'),
+    // Top timer bars
+    const topTimerRows = [
+      document.getElementById('topTimers1'),
+      document.getElementById('topTimers2'),
+      document.getElementById('topTimers3'),
     ];
 
     // Controls page elements
@@ -510,7 +490,7 @@
     const sortByTimeBtn=document.getElementById('sortByTime');
     const clearListBtn=document.getElementById('clearList');
 
-    // ========= COLORS (repeat palette across labels) =========
+    // ========= COLORS =========
     const PALETTE = [
       '#2ecc71','#3498db','#e67e22','#9b59b6','#e74c3c',
       '#1abc9c','#f1c40f','#95a5a6','#ff6b6b','#bdc3c7',
@@ -707,6 +687,12 @@
       return s.replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
     }
 
+    function stripHtml(h){
+      const tmp = document.createElement('div');
+      tmp.innerHTML = h;
+      return tmp.textContent || tmp.innerText || '';
+    }
+
     function setAllOutputs(html){
       // Center prompt
       output.innerHTML = html;
@@ -748,12 +734,6 @@
       if (soundOn) speak(stripHtml(html));
     }
 
-    function stripHtml(h){
-      const tmp = document.createElement('div');
-      tmp.innerHTML = h;
-      return tmp.textContent || tmp.innerText || '';
-    }
-
     // ========= AUDIO =========
     function speak(text){
       try{
@@ -793,7 +773,11 @@
     }
 
     // ========= CONTROLS =========
-    function updateAutoBtn(){ autoBtn.textContent = autoPlay ? '⏸ Stop' : '▶️ Start'; }
+    function updateAutoBtn(){
+      autoBtn.textContent = autoPlay ? '⏸ Stop' : '▶️ Start';
+      autoBtn.classList.toggle('start', !autoPlay);
+      autoBtn.classList.toggle('stop', autoPlay);
+    }
     function updateSoundBtn(){ soundBtn.textContent = soundOn ? '🔊 Sound: ON' : '🔇 Sound: OFF'; }
     autoBtn.addEventListener('click', ()=>{ autoPlay=!autoPlay; localStorage.setItem('autoPlay',autoPlay); updateAutoBtn(); if(autoPlay) startTimer(); else stopTimer(); });
     soundBtn.addEventListener('click', ()=>{ soundOn=!soundOn; localStorage.setItem('soundOn',soundOn); updateSoundBtn(); });
@@ -818,12 +802,12 @@
     }
     modeRows.forEach(bindModeRow);
 
-    // Mini timer rows (mirror presets)
+    // Top timer rows
     function setPreset(min,max){
       minTime=min; maxTime=max;
       localStorage.setItem('minTime', String(min));
       localStorage.setItem('maxTime', String(max));
-      // reflect active on controls page and all mini rows
+      // reflect active on controls page
       [t5,t10,t30,t90,t150].forEach(b=>b.classList.remove('active'));
       if (min===5 && max===10) t5.classList.add('active');
       else if (min===10 && max===20) t10.classList.add('active');
@@ -831,7 +815,8 @@
       else if (min===90 && max===120) t90.classList.add('active');
       else if (min===150 && max===300) t150.classList.add('active');
 
-      miniTimerRows.forEach(row=>{
+      // reflect on top timer bars
+      topTimerRows.forEach(row=>{
         row.querySelectorAll('button').forEach(b=>{
           const [mi,ma] = b.dataset.preset.split('-').map(n=>parseInt(n,10));
           b.classList.toggle('active', mi===min && ma===max);
@@ -839,7 +824,7 @@
       });
       if (autoPlay) startTimer();
     }
-    function bindMiniTimers(row){
+    function bindTopTimers(row){
       row.querySelectorAll('button').forEach(b=>{
         b.addEventListener('click', ()=>{
           const [mi,ma] = b.dataset.preset.split('-').map(n=>parseInt(n,10));
@@ -847,10 +832,9 @@
         });
       });
     }
-    miniTimerRows.forEach(bindMiniTimers);
+    topTimerRows.forEach(bindTopTimers);
 
     // Controls page timing
-    function highlightTiming(){ /* handled in setPreset to keep in sync */ }
     t5.addEventListener('click', ()=>setPreset(5,10));
     t10.addEventListener('click', ()=>setPreset(10,20));
     t30.addEventListener('click', ()=>setPreset(30,60));
@@ -863,7 +847,7 @@
 
     // Volume / rate / toggles
     volRange.addEventListener('input', ()=>{ volume = Math.max(0, Math.min(1, volRange.value/100)); volReadout.textContent = 'Volume: ' + Math.round(volume*100) + '%'; localStorage.setItem('volume', volume.toFixed(3)); });
-    rateRange.addEventListener('input', ()=>{ rate = Math.max(0.6, Math.min(1.6, rateRange.value/100)); rateReadout.textContent = 'Rate: ' + rate.toFixed(2) + '×'; localStorage.setItem('rate', rate.toFixed(3)); });
+    rateRange.addEventListener('input', ()=>{ rate = Math.max(0.6, Math.min(1.6, rateRange.value/100)); rateReadout.textContent = 'Rate: 1.00×'.replace('1.00', rate.toFixed(2)); localStorage.setItem('rate', rate.toFixed(3)); });
     voiceRandom.addEventListener('click', ()=>{ randomVoicePerPrompt = !randomVoicePerPrompt; voiceRandom.textContent = randomVoicePerPrompt ? '🎲 Voice: ON' : '🎲 Voice: OFF'; localStorage.setItem('randomVoicePerPrompt', randomVoicePerPrompt); });
     function updateTagsBtn(){ tagsBtn.textContent = showTags ? '🏷 Tags: ON' : '🏷 Tags: OFF'; }
     tagsBtn.addEventListener('click', ()=>{ showTags=!showTags; localStorage.setItem('showTags', showTags); updateTagsBtn(); generatePrompt(); });
@@ -874,13 +858,13 @@
 
     // Tap/Click to advance prompts
     document.getElementById('tapZone').addEventListener('click', (e)=>{ if (!e.target.closest('button,input,textarea,select')) generatePrompt(); });
-    // list page docks & prompt-only panes: tap to advance
+    // list page docks & prompt-only panes + empty areas: tap to advance
     Object.values(grids).forEach(g=>{
       g.outBox.addEventListener('click', (e)=>{ if (!e.target.closest('button,input,textarea,select')) generatePrompt(); });
     });
-    ['promptOnly1','promptOnly2','promptOnly3'].forEach(id=>{
+    ['promptOnly1','promptOnly2','promptOnly3','stack1','listPane1','promptPane1','stack2','listPane2','promptPane2','stack3','listPane3','promptPane3'].forEach(id=>{
       const el = document.getElementById(id);
-      el.addEventListener('click', (e)=>{ if (!e.target.closest('button,input,textarea,select')) generatePrompt(); });
+      if (el) el.addEventListener('click', (e)=>{ if (!e.target.closest('button,input,textarea,select')) generatePrompt(); });
     });
 
     // Keyboard: any key advances (unless typing / editor open)
@@ -897,7 +881,7 @@
     const exportBtn=document.getElementById('exportBtn'), importBtn=document.getElementById('importBtn'), importFile=document.getElementById('importFile');
     exportBtn.addEventListener('click', ()=>{
       const data = {
-        version: 9,
+        version: 10,
         labels: LABELS, lists, names, meta,
         selectedOrder, mode, showTags,
         settings:{ autoPlay, soundOn, minTime, maxTime, volume, rate, randomVoicePerPrompt }
@@ -922,7 +906,7 @@
             });
           }
           if (data.names){
-            names = {...Object.fromEntries(LABELS.map(l=>[l,''])), ...data.names};
+            names = {...Object.fromEntries(LABELS.map(l=>[l,'' ])), ...data.names};
             localStorage.setItem('promptListNames', JSON.stringify(names));
             refreshAllNames();
           }
@@ -952,7 +936,7 @@
           modeRows.forEach(r=>{
             r.querySelectorAll('button[data-mode]').forEach(b=>b.classList.toggle('active', b.dataset.mode===mode));
           });
-          miniTimerRows.forEach(bindMiniTimers);
+          topTimerRows.forEach(bindTopTimers);
           refreshSelectionBadges(); generatePrompt();
           alert('Import complete.');
         }catch(err){ alert('Import failed: '+err.message); }
